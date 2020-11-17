@@ -80,13 +80,13 @@ void bilateralFilter(const Mat& input, Mat& output, int r, double sI, double sS)
 	gpuCalculation << <grid, block >> > (d_input, d_output, input.cols, input.rows, r, sI, sS);
 	cudaEventRecord(stop, 0); 
 	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&timerGPU, start, stop);
 
 	cudaMemcpy(output.ptr(), d_output, gray_size, cudaMemcpyDeviceToHost);
 
 	cudaFree(d_input);
 	cudaFree(d_output);
-
-	cudaEventElapsedTime(&timerGPU, start, stop);
+	
 	printf("\n GPU time %f msec\n", timerGPU);
 }
 
@@ -100,12 +100,24 @@ int main() {
 	Mat dstGpu(src.rows, src.cols, CV_8UC1);
 	Mat dstCpu;
 	bilateralFilter(src, dstGpu, 4, 80.0, 80.0);
+
+	//использовала некорректный способ подсчета времени, cudaEventRecord - только для GPU
+	//https://forums.developer.nvidia.com/t/timing-cudaeventrecord-ok-for-cpu-timing/11583
 	cudaEventRecord(start, 0);
 	cv::bilateralFilter(src, dstCpu, 9, 80, 80);
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&timerCPU, start, stop);
-	printf("\n CPU time %f msec\n", timerCPU);
+	//printf("\n CPU time %f msec\n", timerCPU);
+	printf("\n Wrong CPU time using cudaEvent %f msec\n", timerCPU);
+
+	//добавила корректный способ подсчета времени на CPU
+	clock_t start_s = clock();
+	cv::bilateralFilter(src, dstCpu, 9, 80, 80);
+	clock_t stop_s = clock();
+	cout << "\n CPU time " << (stop_s - start_s) / double(CLOCKS_PER_SEC) * 1000 << " msec" << endl;
+	//
+
 	imshow("imageCPU", dstCpu);
 	imshow("imageGPU", dstGpu);
 	imwrite("imageCPU.bmp", dstCpu);
